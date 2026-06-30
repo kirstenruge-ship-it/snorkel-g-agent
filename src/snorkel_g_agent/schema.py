@@ -87,10 +87,22 @@ class ModelResponse(BaseModel):
 
 
 class AgentAction(BaseModel):
-    action: Literal["exec", "read_file", "write_file", "append_file", "finish"]
+    action: Literal[
+        "exec",
+        "read_file",
+        "write_file",
+        "append_file",
+        "replace_in_file",
+        "finish",
+    ]
     cmd: str | None = None
     path: str | None = None
     content: str | None = None
+    find: str | None = None
+    replacement: str | None = None
+    regex: bool = False
+    count: int | None = Field(default=1, ge=0)
+    whitespace_flexible: bool = False
     timeout_seconds: int | None = None
     summary: str | None = None
     tests: str | None = None

@@ -60,3 +60,28 @@ async def test_agent_has_no_default_step_ceiling(
     assert provider.calls == 85
     assert result.steps == 86
     assert config.run.max_steps is None
+
+
+def test_agent_uses_builtin_prompt_when_configured_prompt_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_API_KEY", "secret")
+    config = AppConfig(
+        run=RunConfig(default_route="fake"),
+        routes={
+            "fake": RouteConfig(
+                provider="openai-compatible",
+                model="fake-model",
+                base_url="http://127.0.0.1:1/v1",
+                api_key_env="FAKE_API_KEY",
+            )
+        },
+        agent=AgentConfig(system_prompt_path=tmp_path / "missing-system-prompt.md"),
+    )
+    agent = BenchmarkAgent(config, "fake", config.routes["fake"], tmp_path / "out")
+
+    prompt = agent._load_system_prompt()
+
+    assert "replace_in_file" in prompt
+    assert "headless coding benchmark agent" in prompt

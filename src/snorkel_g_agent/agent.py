@@ -9,6 +9,7 @@ from snorkel_g_agent import __version__
 from snorkel_g_agent.actions import ActionParseError, parse_action
 from snorkel_g_agent.context import ContextWindow, append_state_note, initialize_state_file
 from snorkel_g_agent.logging import AgentLogger
+from snorkel_g_agent.prompts import DEFAULT_SYSTEM_PROMPT
 from snorkel_g_agent.provider import OpenAICompatibleProvider
 from snorkel_g_agent.schema import (
     AgentAction,
@@ -48,7 +49,7 @@ class BenchmarkAgent:
         state_file = task_workdir / self.config.run.state_file_name
         initialize_state_file(state_file, task)
 
-        system_prompt = self.config.agent.system_prompt_path.read_text()
+        system_prompt = self._load_system_prompt()
         initial_user = self._initial_user_prompt(task, state_file)
         context = ContextWindow(self.config.run.context_limit_tokens, state_file)
         context.add("system", system_prompt)
@@ -188,6 +189,12 @@ class BenchmarkAgent:
                 "Start by inspecting the workspace. Return exactly one JSON action.",
             ]
         )
+
+    def _load_system_prompt(self) -> str:
+        path = self.config.agent.system_prompt_path
+        if path.exists():
+            return path.read_text()
+        return DEFAULT_SYSTEM_PROMPT
 
     def _update_state(self, state_file: Path, action: AgentAction, result: ToolResult) -> None:
         action_data: dict[str, Any] = action.model_dump(exclude_none=True)

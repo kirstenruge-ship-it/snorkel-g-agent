@@ -17,6 +17,24 @@ def test_parse_loose_json_action() -> None:
     assert action.summary == "done"
 
 
+def test_parse_replace_in_file_action() -> None:
+    action = parse_action(
+        """
+        {
+          "action": "replace_in_file",
+          "path": "main.go",
+          "find": "if x {\\n    return nil\\n}",
+          "replacement": "if x {\\n\\treturn value\\n}",
+          "whitespace_flexible": true
+        }
+        """
+    )
+
+    assert action.action == "replace_in_file"
+    assert action.whitespace_flexible is True
+    assert action.count == 1
+
+
 def test_parse_action_rejects_missing_json() -> None:
     with pytest.raises(ActionParseError):
         parse_action("run pytest please")
