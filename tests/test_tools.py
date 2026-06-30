@@ -47,6 +47,16 @@ async def test_exec_respects_explicit_timeout_for_inspection_command(tmp_path: P
 
 
 @pytest.mark.asyncio
+async def test_exec_does_not_cap_build_command_piped_to_tail(tmp_path: Path) -> None:
+    executor = ToolExecutor(tmp_path, default_timeout=600, max_output_chars=2000)
+
+    result = await executor.run(AgentAction(action="exec", cmd="printf ok | tail -1"))
+
+    assert result.ok
+    assert result.extra["timeout_seconds"] == 600
+
+
+@pytest.mark.asyncio
 async def test_write_and_read_file(tmp_path: Path) -> None:
     executor = ToolExecutor(tmp_path, default_timeout=5, max_output_chars=2000)
 

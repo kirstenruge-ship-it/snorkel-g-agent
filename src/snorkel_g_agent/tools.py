@@ -49,7 +49,7 @@ def _find_spans(text: str, needle: str, *, whitespace_flexible: bool) -> list[tu
 def _effective_timeout(cmd: str, requested: int | None, default_timeout: int) -> int:
     if requested:
         return requested
-    inspection_commands = (
+    inspection_commands = {
         "rg",
         "grep",
         "find",
@@ -61,18 +61,23 @@ def _effective_timeout(cmd: str, requested: int | None, default_timeout: int) ->
         "cat",
         "pwd",
         "wc",
-    )
-    inspection_pattern = rf"(^|[;&|]\s*)({'|'.join(inspection_commands)})\b"
-    if re.search(inspection_pattern, cmd):
-        return min(default_timeout, 60)
-    try:
-        parts = shlex.split(cmd)
-    except ValueError:
+    }
+    for segment in re.split(r"\s*(?:&&|;)\s*", cmd):
+        segment = segment.strip()
+        if not segment:
+            continue
+        try:
+            parts = shlex.split(segment)
+        except ValueError:
+            return default_timeout
+        if not parts:
+            continue
+        executable = Path(parts[0]).name
+        if executable in {"cd", "export"}:
+            continue
+        if executable in inspection_commands:
+            return min(default_timeout, 60)
         return default_timeout
-    if not parts:
-        return default_timeout
-    if Path(parts[0]).name in inspection_commands:
-        return min(default_timeout, 60)
     return default_timeout
 
 
