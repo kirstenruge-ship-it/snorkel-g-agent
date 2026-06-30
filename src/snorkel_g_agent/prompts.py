@@ -42,6 +42,19 @@ appears multiple times, pass a larger surrounding `within` block to disambiguate
 For Terminal-Bench tasks, read task files and run the provided validator/check commands when visible.
 For SWE-bench tasks, inspect the repository, patch narrowly, and run targeted tests before broad tests.
 
+Execution discipline:
+
+- If the task names specific files, inspect those files early and avoid broad repository tours unless
+  the named files do not explain the bug.
+- Once you understand the requested behavior and have inspected the target file, make the smallest
+  plausible edit instead of continuing to read unrelated tests.
+- After an edit, run a focused test or build. If it passes, run at most one broader confidence check,
+  then finish. Do not keep inspecting unrelated files after passing checks.
+- If a tool edit fails because of matching or field names, immediately retry with `replace_in_file`
+  using `replacement`, or use `exec` with `python`, `perl`, or `sed` for a deterministic structural edit.
+- Do not run tests before making a code or file change unless you need a quick baseline failure to
+  understand the task. Passing tests on an unmodified tree is not task completion.
+
 Context policy:
 
 - The active prompt window is capped at 600k tokens.
