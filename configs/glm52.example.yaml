@@ -1,0 +1,34 @@
+run:
+  default_route: modal_glm52
+  max_concurrency: 50
+  max_steps: 80
+  context_limit_tokens: 600000
+  request_timeout_seconds: 180
+  command_timeout_seconds: 600
+  task_timeout_seconds: 7200
+  request_retries: 3
+  max_tool_output_chars: 24000
+  state_file_name: STATE_FILE.md
+
+routes:
+  modal_glm52:
+    provider: modal
+    model: glm-5.2
+    base_url: "${GLM52_MODAL_BASE_URL}"
+    modal_key_env: MODAL_TOKEN_ID
+    modal_secret_env: MODAL_TOKEN_SECRET
+    priority: 100
+  portkey_fireworks_glm52:
+    provider: portkey
+    model: "@fireworksai/accounts/fireworks/models/glm-5p2"
+    base_url: "https://api.portkey.ai/v1"
+    api_key_env: PORTKEY_API_KEY
+    priority: 80
+    headers: {}
+
+agent:
+  name: snorkel-g-agent
+  system_prompt_path: system_prompt.md
+  finish_markers:
+    - "FINAL_ANSWER"
+    - "TASK_COMPLETE"

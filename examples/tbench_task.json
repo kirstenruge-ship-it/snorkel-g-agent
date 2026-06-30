@@ -1,0 +1,7 @@
+{
+  "task_id": "example-terminal-task",
+  "benchmark": "terminal-bench",
+  "instruction": "Inspect this workspace and create a file named answer.txt containing the word ready.",
+  "workdir": ".",
+  "timeout_seconds": 300
+}
