@@ -25,7 +25,7 @@ class RunConfig(BaseModel):
     max_steps: int | None = Field(default=None, ge=1)
     context_limit_tokens: int = Field(default=600_000, ge=1)
     request_timeout_seconds: int = Field(default=180, ge=1)
-    request_retries: int = Field(default=3, ge=0)
+    request_retries: int = Field(default=8, ge=0)
     command_timeout_seconds: int = Field(default=600, ge=1)
     task_timeout_seconds: int = Field(default=7200, ge=1)
     max_tool_output_chars: int = Field(default=24_000, ge=1000)
@@ -107,6 +107,7 @@ class AgentAction(BaseModel):
     context_lines: int = Field(default=0, ge=0, le=5)
     title: str | None = None
     find: str | None = None
+    within: str | None = None
     replacement: str | None = None
     regex: bool = False
     count: int | None = Field(default=1, ge=0)

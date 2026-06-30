@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from typing import Any
 
 import certifi
@@ -44,7 +45,8 @@ class OpenAICompatibleProvider:
                     )
                 if response.status_code < 400:
                     break
-                message = f"provider returned {response.status_code}: {response.text[:2000]}"
+                body = response.text[:2000]
+                message = f"provider returned {response.status_code}: {body}"
                 retryable = response.status_code in {408, 409, 425, 429, 500, 502, 503, 504}
                 if not retryable or attempt >= self.request_retries:
                     raise ProviderError(message)
@@ -53,7 +55,7 @@ class OpenAICompatibleProvider:
                 last_error = exc
                 if attempt >= self.request_retries:
                     raise ProviderError(str(exc)) from exc
-            await asyncio.sleep(min(2**attempt, 20))
+            await asyncio.sleep(min(2**attempt, 30) + random.uniform(0, 1.5))
         else:
             raise ProviderError(str(last_error) if last_error else "provider request failed")
 

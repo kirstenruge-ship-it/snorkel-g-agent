@@ -28,6 +28,23 @@ def _whitespace_flexible_pattern(text: str) -> str:
     return "".join(r"\s+" if part.isspace() else re.escape(part) for part in parts)
 
 
+def _find_spans(text: str, needle: str, *, whitespace_flexible: bool) -> list[tuple[int, int]]:
+    if whitespace_flexible:
+        pattern = _whitespace_flexible_pattern(needle)
+        return [
+            (match.start(), match.end())
+            for match in re.finditer(pattern, text, flags=re.MULTILINE | re.DOTALL)
+        ]
+    spans: list[tuple[int, int]] = []
+    start = 0
+    while True:
+        found = text.find(needle, start)
+        if found == -1:
+            return spans
+        spans.append((found, found + len(needle)))
+        start = found + max(len(needle), 1)
+
+
 class ToolExecutor:
     def __init__(self, workdir: Path, default_timeout: int, max_output_chars: int) -> None:
         self.workdir = workdir.resolve()
@@ -236,10 +253,30 @@ class ToolExecutor:
             path = _safe_path(self.workdir, action.path)
             original = path.read_text(encoding="utf-8")
             count = 1 if action.count is None else action.count
+            target_text = original
+            target_offset = 0
+
+            if action.within is not None:
+                within_spans = _find_spans(
+                    original,
+                    action.within,
+                    whitespace_flexible=action.whitespace_flexible,
+                )
+                if len(within_spans) != 1:
+                    return ToolResult(
+                        ok=False,
+                        content=(
+                            "replace_in_file expected 1 context block match but found "
+                            f"{len(within_spans)} in {action.path}"
+                        ),
+                        extra={"context_matches": len(within_spans)},
+                    )
+                target_offset, target_end = within_spans[0]
+                target_text = original[target_offset:target_end]
 
             if action.regex:
                 pattern = action.find
-                matches = list(re.finditer(pattern, original, flags=re.MULTILINE | re.DOTALL))
+                matches = list(re.finditer(pattern, target_text, flags=re.MULTILINE | re.DOTALL))
                 if count > 0 and len(matches) != count:
                     return ToolResult(
                         ok=False,
@@ -258,13 +295,13 @@ class ToolExecutor:
                 new_text, replacements = re.subn(
                     pattern,
                     action.replacement,
-                    original,
+                    target_text,
                     count=0 if count == 0 else count,
                     flags=re.MULTILINE | re.DOTALL,
                 )
             elif action.whitespace_flexible:
                 pattern = _whitespace_flexible_pattern(action.find)
-                matches = list(re.finditer(pattern, original, flags=re.MULTILINE | re.DOTALL))
+                matches = list(re.finditer(pattern, target_text, flags=re.MULTILINE | re.DOTALL))
                 if count > 0 and len(matches) != count:
                     return ToolResult(
                         ok=False,
@@ -286,12 +323,12 @@ class ToolExecutor:
                 new_text, replacements = re.subn(
                     pattern,
                     lambda _match: action.replacement or "",
-                    original,
+                    target_text,
                     count=0 if count == 0 else count,
                     flags=re.MULTILINE | re.DOTALL,
                 )
             else:
-                matches = original.count(action.find)
+                matches = target_text.count(action.find)
                 if count > 0 and matches != count:
                     return ToolResult(
                         ok=False,
@@ -307,13 +344,19 @@ class ToolExecutor:
                         content=f"replace_in_file found 0 literal matches in {action.path}",
                         extra={"matches": 0},
                     )
-                new_text = original.replace(
+                new_text = target_text.replace(
                     action.find,
                     action.replacement,
                     -1 if count == 0 else count,
                 )
                 replacements = matches if count == 0 else count
 
+            if action.within is not None:
+                new_text = (
+                    original[:target_offset]
+                    + new_text
+                    + original[target_offset + len(target_text) :]
+                )
             path.write_text(new_text, encoding="utf-8")
             return ToolResult(
                 ok=True,

@@ -118,6 +118,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                 "properties": {
                     "path": {"type": "string"},
                     "find": {"type": "string"},
+                    "within": {"type": "string"},
                     "replacement": {"type": "string"},
                     "regex": {"type": "boolean"},
                     "count": {"type": "integer"},

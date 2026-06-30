@@ -116,6 +116,51 @@ async def test_replace_in_file_supports_whitespace_flexible_match(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_replace_in_file_uses_context_block_to_disambiguate(tmp_path: Path) -> None:
+    target = tmp_path / "resource.go"
+    target.write_text(
+        "topLevel := schema.StringAttribute{\n"
+        "\tConflictsWith: []path.Expression{path.MatchRoot(\"value\")},\n"
+        "}\n\n"
+        "fieldMap := schema.MapNestedAttribute{\n"
+        "\tNestedObject: schema.NestedAttributeObject{\n"
+        "\t\tAttributes: map[string]schema.Attribute{\n"
+        "\t\t\t\"value\": schema.StringAttribute{\n"
+        "\t\t\t\tConflictsWith: []path.Expression{path.MatchRoot(\"value\")},\n"
+        "\t\t\t},\n"
+        "\t\t},\n"
+        "\t},\n"
+        "}\n"
+    )
+    executor = ToolExecutor(tmp_path, default_timeout=5, max_output_chars=2000)
+
+    result = await executor.run(
+        AgentAction(
+            action="replace_in_file",
+            path="resource.go",
+            within=(
+                "\"value\": schema.StringAttribute{\n"
+                "    ConflictsWith: []path.Expression{path.MatchRoot(\"value\")},\n"
+                "}"
+            ),
+            find='ConflictsWith: []path.Expression{path.MatchRoot("value")},',
+            replacement=(
+                "Validators: []validator.String{\n"
+                "\t\t\t\t\tmonthYearValidator{},\n"
+                "\t\t\t\t},"
+            ),
+            whitespace_flexible=True,
+        )
+    )
+
+    text = target.read_text()
+    assert result.ok
+    assert text.count("ConflictsWith") == 1
+    assert "monthYearValidator{}" in text
+    assert "topLevel := schema.StringAttribute" in text
+
+
+@pytest.mark.asyncio
 async def test_replace_in_file_rejects_ambiguous_literal_match(tmp_path: Path) -> None:
     target = tmp_path / "main.go"
     target.write_text("return nil\nreturn nil\n")

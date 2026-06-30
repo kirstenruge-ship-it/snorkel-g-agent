@@ -24,6 +24,7 @@ def test_parse_replace_in_file_action() -> None:
           "action": "replace_in_file",
           "path": "main.go",
           "find": "if x {\\n    return nil\\n}",
+          "within": "func target() {\\n    if x {\\n        return nil\\n    }\\n}",
           "replacement": "if x {\\n\\treturn value\\n}",
           "whitespace_flexible": true
         }
@@ -33,6 +34,7 @@ def test_parse_replace_in_file_action() -> None:
     assert action.action == "replace_in_file"
     assert action.whitespace_flexible is True
     assert action.count == 1
+    assert action.within is not None
 
 
 def test_parse_search_text_action() -> None:

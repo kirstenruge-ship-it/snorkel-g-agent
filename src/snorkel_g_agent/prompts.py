@@ -29,13 +29,16 @@ Allowed actions:
 For `exec`, prefer fast inspection commands first. Use `rg` for search when available.
 Use `list_files` and `search_text` when shell quoting or output size would make simple discovery
 annoying. Use `exec` for builds, tests, package managers, and complex pipelines.
-Use `scratchpad` whenever you learn something important: suspected root cause, files touched,
-test commands run, failing errors, or next steps. Treat it as the task ledger that survives context
-compaction.
+Early in the task, inspect visible task materials such as instructions, setup patches, task metadata,
+and allowed public tests. Do not inspect hidden verifier files or hidden tests unless the benchmark
+explicitly exposes them as task materials. Use `scratchpad` to preserve the allowed task contract,
+suspected root cause, files touched, test commands run, failing errors, and next steps. Treat it as
+the task ledger that survives context compaction.
 For precise source edits, prefer `replace_in_file` over rewriting whole files. It supports exact
 literal replacement, regex replacement, and `whitespace_flexible=true`, which lets a find block
 written with ordinary spaces match code indented with tabs or nested whitespace. Keep `count=1`
-for narrow edits; use `count=0` only when every match should be replaced.
+for narrow edits; use `count=0` only when every match should be replaced. When the changed snippet
+appears multiple times, pass a larger surrounding `within` block to disambiguate the location.
 For Terminal-Bench tasks, read task files and run the provided validator/check commands when visible.
 For SWE-bench tasks, inspect the repository, patch narrowly, and run targeted tests before broad tests.
 
