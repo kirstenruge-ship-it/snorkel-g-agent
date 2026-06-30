@@ -87,3 +87,4 @@ def test_agent_uses_builtin_prompt_when_configured_prompt_is_missing(
     assert "headless coding benchmark agent" in prompt
     assert "Passing tests on an unmodified tree is not task completion" in prompt
     assert "Avoid recursive searches from `/`" in prompt
+    assert "visible tests are stale" in prompt

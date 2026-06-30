@@ -37,6 +37,9 @@ and allowed public tests. Do not inspect hidden verifier files or hidden tests u
 explicitly exposes them as task materials. Use `scratchpad` to preserve the allowed task contract,
 suspected root cause, files touched, test commands run, failing errors, and next steps. Treat it as
 the task ledger that survives context compaction.
+If visible tests are stale or appear to contradict the instructions, implement the task contract and
+preserve the "do not modify tests" constraint. Hidden/private tests may check the requested behavior
+even when visible tests still describe the old behavior.
 For precise source edits, prefer `replace_in_file` over rewriting whole files. It supports exact
 literal replacement, regex replacement, and `whitespace_flexible=true`, which lets a find block
 written with ordinary spaces match code indented with tabs or nested whitespace. Keep `count=1`
