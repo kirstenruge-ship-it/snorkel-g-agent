@@ -71,7 +71,7 @@ class BenchmarkAgent:
         prompt_tokens = 0
         completion_tokens = 0
         summary: str | None = None
-        status = "max_steps"
+        status = "timeout"
         error: str | None = None
         deadline = asyncio.get_running_loop().time() + (
             task.timeout_seconds or self.config.run.task_timeout_seconds
@@ -79,10 +79,16 @@ class BenchmarkAgent:
 
         logger.event("start", task_id=task.task_id, benchmark=task.benchmark, route=self.route_name)
         try:
-            for step in range(1, self.config.run.max_steps + 1):
+            step = 0
+            while True:
+                step += 1
                 if asyncio.get_running_loop().time() >= deadline:
                     status = "timeout"
                     error = "task timeout reached"
+                    break
+                if self.config.run.max_steps is not None and step > self.config.run.max_steps:
+                    status = "max_steps"
+                    error = f"max_steps reached ({self.config.run.max_steps})"
                     break
                 if context.compact_if_needed(task):
                     message = f"Compacted context at approx {context.token_estimate()} tokens."
@@ -147,8 +153,6 @@ class BenchmarkAgent:
                     status = "completed" if result.ok else "failed"
                     summary = action.summary or result.content
                     break
-            else:
-                error = f"max_steps reached ({self.config.run.max_steps})"
         except Exception as exc:
             status = "failed"
             error = str(exc)
