@@ -9,6 +9,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from snorkel_g_agent import __version__
 from snorkel_g_agent.agent import BenchmarkAgent
 from snorkel_g_agent.batch import read_manifest, run_batch
 from snorkel_g_agent.config import load_config, resolve_route
@@ -16,6 +17,11 @@ from snorkel_g_agent.schema import TaskSpec
 
 app = typer.Typer(no_args_is_help=True)
 console = Console()
+
+
+@app.command("version")
+def version() -> None:
+    console.print(__version__)
 
 
 @app.command("validate-config")
