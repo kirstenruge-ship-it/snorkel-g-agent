@@ -59,7 +59,6 @@ async def test_agent_has_no_default_step_ceiling(
     assert result.status == "completed"
     assert provider.calls == 85
     assert result.steps == 86
-    assert config.run.max_steps is None
 
 
 def test_agent_uses_builtin_prompt_when_configured_prompt_is_missing(

@@ -22,7 +22,6 @@ class RouteConfig(BaseModel):
 class RunConfig(BaseModel):
     default_route: str
     max_concurrency: int = Field(default=50, ge=1)
-    max_steps: int | None = Field(default=None, ge=1)
     context_limit_tokens: int = Field(default=600_000, ge=1)
     request_timeout_seconds: int = Field(default=180, ge=1)
     request_retries: int = Field(default=8, ge=0)
@@ -132,7 +131,7 @@ class ToolResult(BaseModel):
 class TaskResult(BaseModel):
     task_id: str
     benchmark: BenchmarkName
-    status: Literal["completed", "failed", "timeout", "max_steps"]
+    status: Literal["completed", "failed", "timeout"]
     steps: int
     output_dir: Path
     summary: str | None = None

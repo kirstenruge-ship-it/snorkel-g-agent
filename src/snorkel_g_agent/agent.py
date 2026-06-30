@@ -90,10 +90,6 @@ class BenchmarkAgent:
                     status = "timeout"
                     error = "task timeout reached"
                     break
-                if self.config.run.max_steps is not None and step > self.config.run.max_steps:
-                    status = "max_steps"
-                    error = f"max_steps reached ({self.config.run.max_steps})"
-                    break
                 if context.compact_if_needed(task):
                     message = f"Compacted context at approx {context.token_estimate()} tokens."
                     logger.event("compact", step=step, message=message)
@@ -116,6 +112,7 @@ class BenchmarkAgent:
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                 )
+                logger.agent_message(response.content)
                 context.add("assistant", response.content)
 
                 try:
@@ -128,6 +125,7 @@ class BenchmarkAgent:
                             "|| find . -maxdepth 3 -type f | head -200)"
                         ),
                     )
+                    tool_item_id = logger.tool_started(action)
                     result = await executor.run(action)
                     result.content = (
                         f"Parser warning: {exc}. Runtime executed a safe inspection fallback.\n\n"
@@ -144,8 +142,10 @@ class BenchmarkAgent:
                         exit_code=result.exit_code,
                         content=result.content,
                     )
+                    logger.tool_completed(tool_item_id, action, result)
                     continue
 
+                tool_item_id = logger.tool_started(action)
                 result = await executor.run(action)
                 logger.event(
                     "tool",
@@ -155,6 +155,7 @@ class BenchmarkAgent:
                     exit_code=result.exit_code,
                     content=result.content,
                 )
+                logger.tool_completed(tool_item_id, action, result)
                 trajectory.add_agent_step(response, action, result)
                 context.add("user", result.content)
                 self._update_state(state_file, action, result)
@@ -182,6 +183,7 @@ class BenchmarkAgent:
         )
         (task_dir / "result.json").write_text(json.dumps(result.model_dump(mode="json"), indent=2))
         logger.event("finish", **result.model_dump(mode="json"))
+        logger.turn_completed(prompt_tokens, completion_tokens)
         return result
 
     def _initial_user_prompt(self, task: TaskSpec, state_file: Path) -> str:

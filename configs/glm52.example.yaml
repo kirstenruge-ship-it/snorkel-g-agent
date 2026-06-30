@@ -1,7 +1,6 @@
 run:
   default_route: modal_glm52
   max_concurrency: 50
-  max_steps: 80
   context_limit_tokens: 600000
   request_timeout_seconds: 180
   command_timeout_seconds: 600
