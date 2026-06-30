@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from snorkel_g_agent.schema import AgentAction
 
 _FENCED_JSON = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_INVALID_JSON_ESCAPE = re.compile(r'\\(?!["\\/bfnrtu])')
 
 
 class ActionParseError(ValueError):
@@ -28,11 +29,21 @@ def _candidate_json_blobs(text: str) -> list[str]:
     return candidates
 
 
+def _json_loads_with_repair(blob: str) -> dict[str, Any]:
+    try:
+        return json.loads(blob)
+    except json.JSONDecodeError:
+        repaired = _INVALID_JSON_ESCAPE.sub(r"\\\\", blob)
+        if repaired == blob:
+            raise
+        return json.loads(repaired)
+
+
 def parse_action(text: str) -> AgentAction:
     errors: list[str] = []
     for blob in _candidate_json_blobs(text):
         try:
-            raw: dict[str, Any] = json.loads(blob)
+            raw = _json_loads_with_repair(blob)
             return AgentAction.model_validate(raw)
         except (json.JSONDecodeError, ValidationError) as exc:
             errors.append(str(exc))

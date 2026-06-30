@@ -48,6 +48,18 @@ def test_parse_search_text_action() -> None:
     assert action.context_lines == 2
 
 
+def test_parse_repairs_invalid_json_escape_in_shell_command() -> None:
+    action = parse_action(
+        r'''{
+          "action": "exec",
+          "cmd": "grep -n 'testuser\|GetItemsByTitle' pkg/onepassword/items.go"
+        }'''
+    )
+
+    assert action.action == "exec"
+    assert action.cmd == r"grep -n 'testuser\|GetItemsByTitle' pkg/onepassword/items.go"
+
+
 def test_parse_scratchpad_action() -> None:
     action = parse_action(
         '{"action":"scratchpad","title":"Root cause","content":"MonthYear conversion is wrong"}'
