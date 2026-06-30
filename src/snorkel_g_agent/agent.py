@@ -41,6 +41,7 @@ class BenchmarkAgent:
             config.run.request_retries,
             config.run.request_retry_base_seconds,
             config.run.request_retry_max_seconds,
+            config.run.max_model_tokens,
         )
 
     async def run(self, task: TaskSpec) -> TaskResult:

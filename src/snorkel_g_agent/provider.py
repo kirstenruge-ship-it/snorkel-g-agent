@@ -24,6 +24,7 @@ class OpenAICompatibleProvider:
         request_retries: int = 3,
         request_retry_base_seconds: float = 2.0,
         request_retry_max_seconds: float = 30.0,
+        max_model_tokens: int = 4096,
         on_retry: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.route = route
@@ -31,6 +32,7 @@ class OpenAICompatibleProvider:
         self.request_retries = request_retries
         self.request_retry_base_seconds = request_retry_base_seconds
         self.request_retry_max_seconds = request_retry_max_seconds
+        self.max_model_tokens = max_model_tokens
         self.on_retry = on_retry
 
     async def complete(self, messages: list[ModelMessage]) -> ModelResponse:
@@ -38,6 +40,7 @@ class OpenAICompatibleProvider:
             "model": self.route.model,
             "messages": [message.model_dump() for message in messages],
             "temperature": 0.2,
+            "max_tokens": self.max_model_tokens,
         }
         url = self.route.base_url.rstrip("/") + "/chat/completions"
         timeout = httpx.Timeout(self.request_timeout_seconds)

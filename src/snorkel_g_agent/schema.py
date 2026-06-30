@@ -28,6 +28,7 @@ class RunConfig(BaseModel):
     request_retries: int = Field(default=8, ge=0)
     request_retry_base_seconds: float = Field(default=2.0, ge=0.1)
     request_retry_max_seconds: float = Field(default=30.0, ge=0.1)
+    max_model_tokens: int = Field(default=4096, ge=1)
     command_timeout_seconds: int = Field(default=600, ge=1)
     task_timeout_seconds: int = Field(default=7200, ge=1)
     max_tool_output_chars: int = Field(default=24_000, ge=1000)
