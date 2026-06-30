@@ -86,6 +86,8 @@ def _escape_control_chars_in_strings(blob: str) -> str:
 
 def _normalize_action_aliases(raw: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(raw)
+    if "action" not in normalized and "cmd" in normalized:
+        normalized["action"] = "exec"
     if "replacement" not in normalized and "replace" in normalized:
         normalized["replacement"] = normalized["replace"]
     if "find" not in normalized and "old_string" in normalized:

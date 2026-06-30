@@ -404,7 +404,7 @@ wheels = [
 
 [[package]]
 name = "snorkel-g-agent"
-version = "0.1.11"
+version = "0.1.12"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },

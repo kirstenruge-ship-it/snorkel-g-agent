@@ -50,6 +50,13 @@ def test_parse_replace_in_file_accepts_common_aliases() -> None:
     assert alternate.replacement == "right"
 
 
+def test_parse_exec_action_from_bare_command_object() -> None:
+    action = parse_action('<tool_call>exec\n{"cmd":"go test ./..."}')
+
+    assert action.action == "exec"
+    assert action.cmd == "go test ./..."
+
+
 def test_parse_search_text_action() -> None:
     action = parse_action(
         '{"action":"search_text","pattern":"MonthYear","glob":"**/*.go","context_lines":2}'
