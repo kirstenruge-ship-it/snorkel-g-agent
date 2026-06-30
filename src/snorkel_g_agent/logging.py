@@ -36,6 +36,13 @@ class AgentLogger:
             )
         if event == "compact":
             return f"[{timestamp}] COMPACT {record.get('message', '')}"
+        if event == "provider_retry":
+            return (
+                f"[{timestamp}] PROVIDER_RETRY step={record.get('step')} "
+                f"route={record.get('route')} "
+                f"attempt={record.get('attempt')}/{record.get('max_attempts')} "
+                f"sleep={record.get('sleep_seconds')}s {record.get('message', '')}"
+            )
         if event == "error":
             return f"[{timestamp}] ERROR {record.get('message', '')}"
         return f"[{timestamp}] {event.upper()} {json.dumps(record, ensure_ascii=False)}"

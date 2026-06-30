@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+from collections.abc import Callable
 from typing import Any
 
 import certifi
@@ -21,10 +22,16 @@ class OpenAICompatibleProvider:
         route: RouteConfig,
         request_timeout_seconds: int,
         request_retries: int = 3,
+        request_retry_base_seconds: float = 2.0,
+        request_retry_max_seconds: float = 30.0,
+        on_retry: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.route = route
         self.request_timeout_seconds = request_timeout_seconds
         self.request_retries = request_retries
+        self.request_retry_base_seconds = request_retry_base_seconds
+        self.request_retry_max_seconds = request_retry_max_seconds
+        self.on_retry = on_retry
 
     async def complete(self, messages: list[ModelMessage]) -> ModelResponse:
         payload = {
@@ -55,7 +62,20 @@ class OpenAICompatibleProvider:
                 last_error = exc
                 if attempt >= self.request_retries:
                     raise ProviderError(str(exc)) from exc
-            await asyncio.sleep(min(2**attempt, 30) + random.uniform(0, 1.5))
+            sleep_seconds = min(
+                self.request_retry_base_seconds * (2**attempt),
+                self.request_retry_max_seconds,
+            ) + random.uniform(0, 1.5)
+            if self.on_retry is not None:
+                self.on_retry(
+                    {
+                        "attempt": attempt + 1,
+                        "max_attempts": self.request_retries + 1,
+                        "sleep_seconds": round(sleep_seconds, 3),
+                        "message": str(last_error) if last_error else "provider request failed",
+                    }
+                )
+            await asyncio.sleep(sleep_seconds)
         else:
             raise ProviderError(str(last_error) if last_error else "provider request failed")
 

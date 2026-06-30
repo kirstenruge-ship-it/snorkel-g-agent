@@ -39,6 +39,8 @@ class BenchmarkAgent:
             route,
             config.run.request_timeout_seconds,
             config.run.request_retries,
+            config.run.request_retry_base_seconds,
+            config.run.request_retry_max_seconds,
         )
 
     async def run(self, task: TaskSpec) -> TaskResult:
@@ -96,6 +98,12 @@ class BenchmarkAgent:
                     logger.event("compact", step=step, message=message)
                     trajectory.add_system_step("Context compacted.", message)
 
+                self.provider.on_retry = lambda payload, current_step=step: logger.event(
+                    "provider_retry",
+                    step=current_step,
+                    route=self.route_name,
+                    **payload,
+                )
                 response = await self.provider.complete(context.messages)
                 prompt_tokens += response.usage.prompt_tokens or 0
                 completion_tokens += response.usage.completion_tokens or 0
