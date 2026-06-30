@@ -23,7 +23,7 @@ def test_agent_logger_writes_codex_style_jsonl(tmp_path: Path) -> None:
     logger.turn_completed(10, 3)
 
     text = (tmp_path / "agent.log.txt").read_text()
-    assert (tmp_path / "codex.txt").read_text() == text
+    assert not (tmp_path / "codex.txt").exists()
     assert "print('secret code')" not in text
     assert "full file content is in trajectory.json" in text
 

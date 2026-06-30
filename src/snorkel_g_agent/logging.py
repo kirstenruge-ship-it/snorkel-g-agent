@@ -15,7 +15,6 @@ class AgentLogger:
         self.output_dir = output_dir
         self.jsonl_path = output_dir / "agent.log.jsonl"
         self.text_path = output_dir / "agent.log.txt"
-        self.codex_path = output_dir / "codex.txt"
         self.thread_id = f"thread-{uuid4().hex}"
         self._item_index = 0
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -160,7 +159,6 @@ class AgentLogger:
         self._write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
     def _write_text(self, line: str) -> None:
-        for path in (self.text_path, self.codex_path):
-            with path.open("a", encoding="utf-8") as handle:
-                handle.write(line + "\n")
+        with self.text_path.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
         print(line, flush=True)
