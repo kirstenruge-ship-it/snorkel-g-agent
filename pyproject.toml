@@ -1,6 +1,6 @@
 [project]
 name = "snorkel-g-agent"
-version = "0.1.10"
+version = "0.1.11"
 description = "Dedicated GLM-5.2 benchmark agent for SWE-bench and Terminal-Bench style tasks."
 readme = "README.md"
 requires-python = ">=3.11"

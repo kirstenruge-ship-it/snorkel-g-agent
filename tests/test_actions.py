@@ -73,6 +73,22 @@ def test_parse_repairs_invalid_json_escape_in_shell_command() -> None:
     assert action.cmd == r"grep -n 'testuser\|GetItemsByTitle' pkg/onepassword/items.go"
 
 
+def test_parse_repairs_literal_control_chars_in_json_string() -> None:
+    action = parse_action(
+        """{
+          "action": "write_file",
+          "path": "main.go",
+          "content": "package main
+	func main() {
+	}
+"
+        }"""
+    )
+
+    assert action.action == "write_file"
+    assert action.content == "package main\n\tfunc main() {\n\t}\n"
+
+
 def test_parse_scratchpad_action() -> None:
     action = parse_action(
         '{"action":"scratchpad","title":"Root cause","content":"MonthYear conversion is wrong"}'

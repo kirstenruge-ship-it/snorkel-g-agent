@@ -30,14 +30,59 @@ def _candidate_json_blobs(text: str) -> list[str]:
 
 
 def _json_loads_with_repair(blob: str) -> dict[str, Any]:
-    try:
-        return json.loads(blob)
-    except json.JSONDecodeError:
-        repaired = _INVALID_JSON_ESCAPE.sub(r"\\\\", blob)
-        if repaired == blob:
-            raise
-        return json.loads(repaired)
+    variants = [blob]
+    escaped_controls = _escape_control_chars_in_strings(blob)
+    if escaped_controls != blob:
+        variants.append(escaped_controls)
+    invalid_escape_repaired = _INVALID_JSON_ESCAPE.sub(r"\\\\", blob)
+    if invalid_escape_repaired != blob:
+        variants.append(invalid_escape_repaired)
+    both_repaired = _INVALID_JSON_ESCAPE.sub(r"\\\\", escaped_controls)
+    if both_repaired not in variants:
+        variants.append(both_repaired)
 
+    last_error: json.JSONDecodeError | None = None
+    for variant in variants:
+        try:
+            return json.loads(variant)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    raise json.JSONDecodeError("no JSON candidate", blob, 0)
+
+
+def _escape_control_chars_in_strings(blob: str) -> str:
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    for char in blob:
+        if not in_string:
+            if char == '"':
+                in_string = True
+            out.append(char)
+            continue
+
+        if escaped:
+            out.append(char)
+            escaped = False
+        elif char == "\\":
+            out.append(char)
+            escaped = True
+        elif char == '"':
+            out.append(char)
+            in_string = False
+        elif char == "\n":
+            out.append("\\n")
+        elif char == "\r":
+            out.append("\\r")
+        elif char == "\t":
+            out.append("\\t")
+        elif ord(char) < 0x20:
+            out.append(f"\\u{ord(char):04x}")
+        else:
+            out.append(char)
+    return "".join(out)
 
 def _normalize_action_aliases(raw: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(raw)
