@@ -37,6 +37,19 @@ def test_parse_replace_in_file_action() -> None:
     assert action.within is not None
 
 
+def test_parse_replace_in_file_accepts_common_aliases() -> None:
+    action = parse_action(
+        '{"action":"replace_in_file","path":"main.go","find":"old","replace":"new"}'
+    )
+    alternate = parse_action(
+        '{"action":"replace_in_file","path":"main.go","old_string":"left","new_string":"right"}'
+    )
+
+    assert action.replacement == "new"
+    assert alternate.find == "left"
+    assert alternate.replacement == "right"
+
+
 def test_parse_search_text_action() -> None:
     action = parse_action(
         '{"action":"search_text","pattern":"MonthYear","glob":"**/*.go","context_lines":2}'

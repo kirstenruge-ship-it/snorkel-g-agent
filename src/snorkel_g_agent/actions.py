@@ -39,12 +39,23 @@ def _json_loads_with_repair(blob: str) -> dict[str, Any]:
         return json.loads(repaired)
 
 
+def _normalize_action_aliases(raw: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(raw)
+    if "replacement" not in normalized and "replace" in normalized:
+        normalized["replacement"] = normalized["replace"]
+    if "find" not in normalized and "old_string" in normalized:
+        normalized["find"] = normalized["old_string"]
+    if "replacement" not in normalized and "new_string" in normalized:
+        normalized["replacement"] = normalized["new_string"]
+    return normalized
+
+
 def parse_action(text: str) -> AgentAction:
     errors: list[str] = []
     for blob in _candidate_json_blobs(text):
         try:
             raw = _json_loads_with_repair(blob)
-            return AgentAction.model_validate(raw)
+            return AgentAction.model_validate(_normalize_action_aliases(raw))
         except (json.JSONDecodeError, ValidationError) as exc:
             errors.append(str(exc))
     joined = "; ".join(errors[-2:]) if errors else "no JSON object found"
