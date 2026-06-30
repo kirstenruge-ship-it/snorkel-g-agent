@@ -17,6 +17,36 @@ async def test_exec_runs_in_workdir(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_exec_caps_simple_inspection_command_timeout(tmp_path: Path) -> None:
+    executor = ToolExecutor(tmp_path, default_timeout=600, max_output_chars=2000)
+
+    result = await executor.run(AgentAction(action="exec", cmd="pwd"))
+
+    assert result.ok
+    assert result.extra["timeout_seconds"] == 60
+
+
+@pytest.mark.asyncio
+async def test_exec_caps_inspection_command_after_cd(tmp_path: Path) -> None:
+    executor = ToolExecutor(tmp_path, default_timeout=600, max_output_chars=2000)
+
+    result = await executor.run(AgentAction(action="exec", cmd="cd . && rg -n missing-pattern"))
+
+    assert not result.ok
+    assert result.extra["timeout_seconds"] == 60
+
+
+@pytest.mark.asyncio
+async def test_exec_respects_explicit_timeout_for_inspection_command(tmp_path: Path) -> None:
+    executor = ToolExecutor(tmp_path, default_timeout=600, max_output_chars=2000)
+
+    result = await executor.run(AgentAction(action="exec", cmd="pwd", timeout_seconds=120))
+
+    assert result.ok
+    assert result.extra["timeout_seconds"] == 120
+
+
+@pytest.mark.asyncio
 async def test_write_and_read_file(tmp_path: Path) -> None:
     executor = ToolExecutor(tmp_path, default_timeout=5, max_output_chars=2000)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import shlex
 from pathlib import Path
 
 from snorkel_g_agent.schema import AgentAction, ToolResult
@@ -45,6 +46,36 @@ def _find_spans(text: str, needle: str, *, whitespace_flexible: bool) -> list[tu
         start = found + max(len(needle), 1)
 
 
+def _effective_timeout(cmd: str, requested: int | None, default_timeout: int) -> int:
+    if requested:
+        return requested
+    inspection_commands = (
+        "rg",
+        "grep",
+        "find",
+        "ls",
+        "sed",
+        "awk",
+        "head",
+        "tail",
+        "cat",
+        "pwd",
+        "wc",
+    )
+    inspection_pattern = rf"(^|[;&|]\s*)({'|'.join(inspection_commands)})\b"
+    if re.search(inspection_pattern, cmd):
+        return min(default_timeout, 60)
+    try:
+        parts = shlex.split(cmd)
+    except ValueError:
+        return default_timeout
+    if not parts:
+        return default_timeout
+    if Path(parts[0]).name in inspection_commands:
+        return min(default_timeout, 60)
+    return default_timeout
+
+
 class ToolExecutor:
     def __init__(self, workdir: Path, default_timeout: int, max_output_chars: int) -> None:
         self.workdir = workdir.resolve()
@@ -78,7 +109,7 @@ class ToolExecutor:
     async def _exec(self, action: AgentAction) -> ToolResult:
         if not action.cmd:
             return ToolResult(ok=False, content="exec action missing cmd")
-        timeout = action.timeout_seconds or self.default_timeout
+        timeout = _effective_timeout(action.cmd, action.timeout_seconds, self.default_timeout)
         process = await asyncio.create_subprocess_shell(
             action.cmd,
             cwd=self.workdir,
