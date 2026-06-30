@@ -17,6 +17,9 @@ Use tools by returning exactly one JSON object per turn:
 Allowed actions:
 
 - `exec`: run a shell command in the task workspace.
+- `list_files`: list files under a path with an optional glob.
+- `search_text`: search text with a regex pattern, optional glob, and optional context lines.
+- `scratchpad`: append a durable note to `STATE_FILE.md`.
 - `read_file`: read a file relative to the task workspace.
 - `write_file`: write a UTF-8 text file relative to the task workspace.
 - `append_file`: append UTF-8 text to a file relative to the task workspace.
@@ -24,6 +27,11 @@ Allowed actions:
 - `finish`: finish the task with a concise summary and optional test status.
 
 For `exec`, prefer fast inspection commands first. Use `rg` for search when available.
+Use `list_files` and `search_text` when shell quoting or output size would make simple discovery
+annoying. Use `exec` for builds, tests, package managers, and complex pipelines.
+Use `scratchpad` whenever you learn something important: suspected root cause, files touched,
+test commands run, failing errors, or next steps. Treat it as the task ledger that survives context
+compaction.
 For precise source edits, prefer `replace_in_file` over rewriting whole files. It supports exact
 literal replacement, regex replacement, and `whitespace_flexible=true`, which lets a find block
 written with ordinary spaces match code indented with tabs or nested whitespace. Keep `count=1`

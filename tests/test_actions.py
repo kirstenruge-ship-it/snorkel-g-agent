@@ -35,6 +35,27 @@ def test_parse_replace_in_file_action() -> None:
     assert action.count == 1
 
 
+def test_parse_search_text_action() -> None:
+    action = parse_action(
+        '{"action":"search_text","pattern":"MonthYear","glob":"**/*.go","context_lines":2}'
+    )
+
+    assert action.action == "search_text"
+    assert action.pattern == "MonthYear"
+    assert action.glob == "**/*.go"
+    assert action.context_lines == 2
+
+
+def test_parse_scratchpad_action() -> None:
+    action = parse_action(
+        '{"action":"scratchpad","title":"Root cause","content":"MonthYear conversion is wrong"}'
+    )
+
+    assert action.action == "scratchpad"
+    assert action.title == "Root cause"
+    assert "MonthYear" in (action.content or "")
+
+
 def test_parse_action_rejects_missing_json() -> None:
     with pytest.raises(ActionParseError):
         parse_action("run pytest please")

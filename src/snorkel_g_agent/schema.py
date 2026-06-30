@@ -89,6 +89,9 @@ class ModelResponse(BaseModel):
 class AgentAction(BaseModel):
     action: Literal[
         "exec",
+        "list_files",
+        "search_text",
+        "scratchpad",
         "read_file",
         "write_file",
         "append_file",
@@ -98,6 +101,11 @@ class AgentAction(BaseModel):
     cmd: str | None = None
     path: str | None = None
     content: str | None = None
+    pattern: str | None = None
+    glob: str | None = None
+    max_results: int = Field(default=200, ge=1)
+    context_lines: int = Field(default=0, ge=0, le=5)
+    title: str | None = None
     find: str | None = None
     replacement: str | None = None
     regex: bool = False

@@ -31,6 +31,50 @@ async def test_write_and_read_file(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_files_and_search_text(tmp_path: Path) -> None:
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "item.go").write_text("func main() {\n\tMonthYear()\n}\n")
+    (tmp_path / "pkg" / "item.txt").write_text("MonthYear in docs\n")
+    executor = ToolExecutor(tmp_path, default_timeout=5, max_output_chars=2000)
+
+    listed = await executor.run(AgentAction(action="list_files", glob="**/*.go"))
+    searched = await executor.run(
+        AgentAction(
+            action="search_text",
+            pattern="MonthYear",
+            glob="**/*.go",
+            context_lines=1,
+        )
+    )
+
+    assert listed.ok
+    assert "pkg/item.go" in listed.content
+    assert "pkg/item.txt" not in listed.content
+    assert searched.ok
+    assert "pkg/item.go:2:>" in searched.content
+    assert "func main" in searched.content
+
+
+@pytest.mark.asyncio
+async def test_scratchpad_appends_to_state_file(tmp_path: Path) -> None:
+    (tmp_path / "STATE_FILE.md").write_text("# STATE_FILE\n")
+    executor = ToolExecutor(tmp_path, default_timeout=5, max_output_chars=2000)
+
+    result = await executor.run(
+        AgentAction(
+            action="scratchpad",
+            title="Evidence",
+            content="Task 3 needs whitespace-flexible edits.",
+        )
+    )
+
+    assert result.ok
+    state = (tmp_path / "STATE_FILE.md").read_text()
+    assert "## Evidence" in state
+    assert "whitespace-flexible" in state
+
+
+@pytest.mark.asyncio
 async def test_rejects_path_escape(tmp_path: Path) -> None:
     executor = ToolExecutor(tmp_path, default_timeout=5, max_output_chars=2000)
 

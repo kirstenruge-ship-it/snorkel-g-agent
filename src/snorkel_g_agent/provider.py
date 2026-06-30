@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import certifi
 import httpx
 
 from snorkel_g_agent.config import route_headers
@@ -35,7 +36,7 @@ class OpenAICompatibleProvider:
         last_error: Exception | None = None
         for attempt in range(self.request_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
+                async with httpx.AsyncClient(timeout=timeout, verify=certifi.where()) as client:
                     response = await client.post(
                         url,
                         headers=route_headers(self.route),

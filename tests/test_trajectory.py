@@ -29,4 +29,7 @@ def test_trajectory_writer_emits_harbor_atif(tmp_path: Path) -> None:
 
     assert '"schema_version": "ATIF-v1.7"' in data
     assert '"tool_calls"' in data
+    assert '"name": "replace_in_file"' in data
+    assert '"name": "search_text"' in data
+    assert '"name": "scratchpad"' in data
     assert (tmp_path / "out" / "trajectory.harbor.jsonl").exists()

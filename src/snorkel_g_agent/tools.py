@@ -37,6 +37,12 @@ class ToolExecutor:
     async def run(self, action: AgentAction) -> ToolResult:
         if action.action == "exec":
             return await self._exec(action)
+        if action.action == "list_files":
+            return self._list_files(action)
+        if action.action == "search_text":
+            return self._search_text(action)
+        if action.action == "scratchpad":
+            return self._scratchpad(action)
         if action.action == "read_file":
             return self._read_file(action)
         if action.action == "write_file":
@@ -120,6 +126,104 @@ class ToolExecutor:
             )
         except Exception as exc:
             return ToolResult(ok=False, content=f"{action.action} failed: {exc}")
+
+    def _list_files(self, action: AgentAction) -> ToolResult:
+        try:
+            base = _safe_path(self.workdir, action.path or ".")
+            if not base.exists():
+                return ToolResult(
+                    ok=False,
+                    content=f"list_files path does not exist: {action.path}",
+                )
+            pattern = action.glob or "**/*"
+            files = [
+                path.relative_to(self.workdir).as_posix()
+                for path in sorted(base.glob(pattern))
+                if path.is_file()
+            ]
+            limited = files[: action.max_results]
+            truncated = len(files) > len(limited)
+            suffix = (
+                f"\n... truncated {len(files) - len(limited)} more file(s)"
+                if truncated
+                else ""
+            )
+            return ToolResult(
+                ok=True,
+                content="\n".join(limited) + suffix,
+                truncated=truncated,
+                extra={"matches": len(files), "returned": len(limited)},
+            )
+        except Exception as exc:
+            return ToolResult(ok=False, content=f"list_files failed: {exc}")
+
+    def _search_text(self, action: AgentAction) -> ToolResult:
+        if not action.pattern:
+            return ToolResult(ok=False, content="search_text action missing pattern")
+        try:
+            base = _safe_path(self.workdir, action.path or ".")
+            if not base.exists():
+                return ToolResult(
+                    ok=False,
+                    content=f"search_text path does not exist: {action.path}",
+                )
+            regex = re.compile(action.pattern)
+            file_pattern = action.glob or "**/*"
+            results: list[str] = []
+            for path in sorted(base.glob(file_pattern)):
+                if not path.is_file():
+                    continue
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+                lines = text.splitlines()
+                for idx, line in enumerate(lines, start=1):
+                    if not regex.search(line):
+                        continue
+                    start = max(1, idx - action.context_lines)
+                    end = min(len(lines), idx + action.context_lines)
+                    if action.context_lines:
+                        for line_no in range(start, end + 1):
+                            prefix = ">" if line_no == idx else " "
+                            results.append(
+                                f"{path.relative_to(self.workdir).as_posix()}:{line_no}:{prefix}"
+                                f"{lines[line_no - 1]}"
+                            )
+                    else:
+                        results.append(f"{path.relative_to(self.workdir).as_posix()}:{idx}:{line}")
+                    if len(results) >= action.max_results:
+                        content = "\n".join(results) + "\n... truncated more match(es)"
+                        return ToolResult(
+                            ok=True,
+                            content=content,
+                            truncated=True,
+                            extra={"returned": len(results)},
+                        )
+            return ToolResult(
+                ok=True,
+                content="\n".join(results) if results else "No matches",
+                extra={"returned": len(results)},
+            )
+        except re.error as exc:
+            return ToolResult(ok=False, content=f"search_text regex failed: {exc}")
+        except Exception as exc:
+            return ToolResult(ok=False, content=f"search_text failed: {exc}")
+
+    def _scratchpad(self, action: AgentAction) -> ToolResult:
+        if action.content is None:
+            return ToolResult(ok=False, content="scratchpad action missing content")
+        try:
+            path = _safe_path(self.workdir, "STATE_FILE.md")
+            title = action.title or "Note"
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(f"\n\n## {title}\n\n{action.content.strip()}\n")
+            return ToolResult(
+                ok=True,
+                content=f"UPDATED scratchpad {path.relative_to(self.workdir).as_posix()}",
+            )
+        except Exception as exc:
+            return ToolResult(ok=False, content=f"scratchpad failed: {exc}")
 
     def _replace_in_file(self, action: AgentAction) -> ToolResult:
         if not action.path:
