@@ -16,10 +16,12 @@ class AgentLogger:
 
     def event(self, event_type: str, **payload: Any) -> None:
         record = {"timestamp": utc_now(), "event": event_type, **payload}
+        formatted = self._format_text(record)
         with self.jsonl_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         with self.text_path.open("a", encoding="utf-8") as handle:
-            handle.write(self._format_text(record) + "\n")
+            handle.write(formatted + "\n")
+        print(formatted, flush=True)
 
     def _format_text(self, record: dict[str, Any]) -> str:
         event = record["event"]
