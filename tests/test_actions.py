@@ -17,6 +17,36 @@ def test_parse_loose_json_action() -> None:
     assert action.summary == "done"
 
 
+def test_parse_tool_call_wrapper_json_action() -> None:
+    action = parse_action(
+        'Let me inspect.\n<tool_call>{"action":"exec","cmd":"pwd","timeout_seconds":10}</tool_call>'
+    )
+
+    assert action.action == "exec"
+    assert action.cmd == "pwd"
+    assert action.timeout_seconds == 10
+
+
+def test_parse_tool_call_missing_opening_brace() -> None:
+    action = parse_action(
+        "I need a note."
+        '<tool_call>action":"scratchpad","title":"Finding","content":"looping"}</tool_call>'
+    )
+
+    assert action.action == "scratchpad"
+    assert action.title == "Finding"
+    assert action.content == "looping"
+
+
+def test_parse_unclosed_tool_call_missing_opening_brace() -> None:
+    action = parse_action(
+        'Trying direct SQLi now.<tool_call>action":"exec","cmd":"echo test","timeout_seconds":10}'
+    )
+
+    assert action.action == "exec"
+    assert action.cmd == "echo test"
+
+
 def test_parse_replace_in_file_action() -> None:
     action = parse_action(
         """

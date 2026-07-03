@@ -119,17 +119,23 @@ class BenchmarkAgent:
                     action = parse_action(response.content)
                 except ActionParseError as exc:
                     action = AgentAction(
-                        action="exec",
-                        cmd=(
-                            "pwd && (command -v rg >/dev/null && rg --files | head -200 "
-                            "|| find . -maxdepth 3 -type f | head -200)"
-                        ),
+                        action="scratchpad",
+                        title="Action parse error",
+                        content=response.content[:2000],
                     )
-                    tool_item_id = logger.tool_started(action)
-                    result = await executor.run(action)
-                    result.content = (
-                        f"Parser warning: {exc}. Runtime executed a safe inspection fallback.\n\n"
-                        f"{result.content}"
+                    result = ToolResult(
+                        ok=False,
+                        content=(
+                            "Action parse error: "
+                            f"{exc}\n\n"
+                            "Your previous response did not contain a valid action. "
+                            "Return exactly one JSON object and no prose, no markdown, "
+                            "and no <tool_call> wrapper. Examples:\n"
+                            '{"action":"exec","cmd":"pwd","timeout_seconds":10}\n'
+                            '{"action":"scratchpad","title":"note","content":"what you learned"}\n'
+                            '{"action":"finish","summary":"done","tests":"not run"}'
+                        ),
+                        extra={"parse_error": True},
                     )
                     trajectory.add_agent_step(response, action, result)
                     context.add("user", result.content)
@@ -137,12 +143,11 @@ class BenchmarkAgent:
                     logger.event(
                         "tool",
                         step=step,
-                        action=action.action,
+                        action="parse_error",
                         ok=result.ok,
                         exit_code=result.exit_code,
                         content=result.content,
                     )
-                    logger.tool_completed(tool_item_id, action, result)
                     continue
 
                 tool_item_id = logger.tool_started(action)

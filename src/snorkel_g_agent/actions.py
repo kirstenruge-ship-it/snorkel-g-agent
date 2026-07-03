@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from snorkel_g_agent.schema import AgentAction
 
 _FENCED_JSON = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_TOOL_CALL_BLOCK = re.compile(r"<tool_call>\s*(.*?)(?:</tool_call>|$)", re.DOTALL)
 _INVALID_JSON_ESCAPE = re.compile(r'\\(?!["\\/bfnrtu])')
 
 
@@ -18,6 +19,7 @@ class ActionParseError(ValueError):
 
 def _candidate_json_blobs(text: str) -> list[str]:
     candidates = [match.group(1) for match in _FENCED_JSON.finditer(text)]
+    candidates.extend(_tool_call_candidates(text))
     stripped = text.strip()
     if stripped.startswith("{") and stripped.endswith("}"):
         candidates.insert(0, stripped)
@@ -26,7 +28,47 @@ def _candidate_json_blobs(text: str) -> list[str]:
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
         candidates.append(text[start : end + 1])
+    return _dedupe(candidates)
+
+
+def _tool_call_candidates(text: str) -> list[str]:
+    candidates: list[str] = []
+    for match in _TOOL_CALL_BLOCK.finditer(text):
+        blob = match.group(1).strip()
+        if not blob:
+            continue
+        candidates.append(blob)
+        repaired = _repair_tool_call_blob(blob)
+        if repaired != blob:
+            candidates.append(repaired)
     return candidates
+
+
+def _repair_tool_call_blob(blob: str) -> str:
+    repaired = blob.strip()
+    if repaired.startswith("{"):
+        return repaired
+
+    if repaired.startswith('"action"'):
+        repaired = "{" + repaired
+    elif repaired.startswith("action\""):
+        repaired = "{\"" + repaired
+    elif repaired.startswith("action:"):
+        repaired = '{"action"' + repaired.removeprefix("action")
+
+    if repaired.startswith("{") and not repaired.endswith("}"):
+        repaired += "}"
+    return repaired
+
+
+def _dedupe(candidates: list[str]) -> list[str]:
+    seen: set[str] = set()
+    unique: list[str] = []
+    for candidate in candidates:
+        if candidate not in seen:
+            unique.append(candidate)
+            seen.add(candidate)
+    return unique
 
 
 def _json_loads_with_repair(blob: str) -> dict[str, Any]:

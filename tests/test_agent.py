@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,19 @@ class CountingProvider:
             content = '{"action":"finish","summary":"done after many steps"}'
         else:
             content = '{"action":"append_file","path":"scratch.txt","content":"tick\\n"}'
+        return ModelResponse(content=content, model="fake", usage=Usage())
+
+
+class ParseErrorThenFinishProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def complete(self, messages):  # noqa: ANN001
+        self.calls += 1
+        if self.calls == 1:
+            content = "I should inspect first, but this is not a JSON action."
+        else:
+            content = '{"action":"finish","summary":"recovered"}'
         return ModelResponse(content=content, model="fake", usage=Usage())
 
 
@@ -87,3 +101,41 @@ def test_agent_uses_builtin_prompt_when_configured_prompt_is_missing(
     assert "Passing tests on an unmodified tree is not task completion" in prompt
     assert "Avoid recursive searches from `/`" in prompt
     assert "visible tests are stale" in prompt
+
+
+@pytest.mark.asyncio
+async def test_agent_parse_error_prompts_for_repair_without_safe_exec_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_API_KEY", "secret")
+    system_prompt = tmp_path / "system.md"
+    system_prompt.write_text("system")
+    config = AppConfig(
+        run=RunConfig(default_route="fake", command_timeout_seconds=5),
+        routes={
+            "fake": RouteConfig(
+                provider="openai-compatible",
+                model="fake-model",
+                base_url="http://127.0.0.1:1/v1",
+                api_key_env="FAKE_API_KEY",
+            )
+        },
+        agent=AgentConfig(system_prompt_path=system_prompt),
+    )
+    agent = BenchmarkAgent(config, "fake", config.routes["fake"], tmp_path / "out")
+    provider = ParseErrorThenFinishProvider()
+    agent.provider = provider  # type: ignore[assignment]
+
+    result = await agent.run(
+        TaskSpec(task_id="parse-repair", instruction="do it", workdir=tmp_path)
+    )
+
+    assert result.status == "completed"
+    assert provider.calls == 2
+    trajectory = json.loads((result.output_dir / "agent" / "trajectory.json").read_text())
+    observations = json.dumps(trajectory["steps"])
+    assert "Action parse error" in observations
+    assert "Return exactly one JSON object" in observations
+    assert "safe inspection fallback" not in observations
+    assert "rg --files" not in observations
