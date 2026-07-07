@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -71,6 +72,32 @@ class _NativeToolCallClient:
         )
 
 
+class _RejectToolsThenAcceptClient:
+    calls: list[dict[str, Any]] = []
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    async def __aenter__(self) -> _RejectToolsThenAcceptClient:
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        pass
+
+    async def post(self, url: str, headers: dict[str, str], json: dict[str, Any]) -> httpx.Response:
+        self.__class__.calls.append(json)
+        if len(self.__class__.calls) == 1:
+            return httpx.Response(400, text="unknown field: tool_choice")
+        return httpx.Response(
+            200,
+            json={
+                "model": "glm-5.2",
+                "choices": [{"message": {"content": '{"action":"finish"}'}}],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 3},
+            },
+        )
+
+
 @pytest.mark.asyncio
 async def test_provider_sends_max_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(httpx, "AsyncClient", _CaptureClient)
@@ -94,6 +121,28 @@ async def test_provider_sends_max_tokens(monkeypatch: pytest.MonkeyPatch) -> Non
     assert any(
         tool["function"]["name"] == "exec" for tool in _CaptureClient.payload["tools"]
     )
+
+
+@pytest.mark.asyncio
+async def test_provider_can_disable_native_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(httpx, "AsyncClient", _CaptureClient)
+    monkeypatch.setenv("FAKE_API_KEY", "secret")
+    provider = OpenAICompatibleProvider(
+        RouteConfig(
+            provider="openai-compatible",
+            model="glm-5.2",
+            base_url="https://example.invalid/v1",
+            api_key_env="FAKE_API_KEY",
+            use_native_tools=False,
+        ),
+        request_timeout_seconds=30,
+    )
+
+    await provider.complete([ModelMessage(role="user", content="hello")])
+
+    assert _CaptureClient.payload is not None
+    assert "tools" not in _CaptureClient.payload
+    assert "tool_choice" not in _CaptureClient.payload
 
 
 @pytest.mark.asyncio
@@ -137,3 +186,35 @@ async def test_provider_converts_native_tool_calls_to_action_json(
 
     assert response.content == '{"name": "bash", "arguments": {"command": "pytest -q"}}'
     assert response.raw["choices"][0]["message"]["tool_calls"][0]["function"]["name"] == "bash"
+
+
+@pytest.mark.asyncio
+async def test_provider_falls_back_when_tool_schema_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _RejectToolsThenAcceptClient.calls = []
+    monkeypatch.setattr(httpx, "AsyncClient", _RejectToolsThenAcceptClient)
+    monkeypatch.setenv("FAKE_API_KEY", "secret")
+    request_log_path = tmp_path / "llm_requests.jsonl"
+    provider = OpenAICompatibleProvider(
+        RouteConfig(
+            provider="openai-compatible",
+            model="glm-5.2",
+            base_url="https://example.invalid/v1",
+            api_key_env="FAKE_API_KEY",
+        ),
+        request_timeout_seconds=30,
+        request_retries=1,
+        request_log_path=request_log_path,
+    )
+
+    response = await provider.complete([ModelMessage(role="user", content="hello")])
+
+    assert response.content == '{"action":"finish"}'
+    assert "tools" in _RejectToolsThenAcceptClient.calls[0]
+    assert "tools" not in _RejectToolsThenAcceptClient.calls[1]
+    log_text = request_log_path.read_text()
+    assert "tool_schema_rejected" in log_text
+    assert "FAKE_API_KEY" not in log_text
+    assert "secret" not in log_text

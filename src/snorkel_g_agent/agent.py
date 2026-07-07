@@ -48,6 +48,7 @@ class BenchmarkAgent:
         task_dir = self.output_dir / task.task_id
         task_dir.mkdir(parents=True, exist_ok=True)
         logger = AgentLogger(task_dir)
+        self.provider.request_log_path = task_dir / "llm_requests.jsonl"
         task_workdir = task.workdir.resolve()
         state_file = task_workdir / self.config.run.state_file_name
         initialize_state_file(state_file, task)

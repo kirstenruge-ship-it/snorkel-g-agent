@@ -17,6 +17,8 @@ class RouteConfig(BaseModel):
     modal_secret_env: str = "MODAL_TOKEN_SECRET"
     priority: int = 0
     headers: dict[str, str] = Field(default_factory=dict)
+    use_native_tools: bool = True
+    native_tool_fallback: bool = True
 
 
 class RunConfig(BaseModel):
