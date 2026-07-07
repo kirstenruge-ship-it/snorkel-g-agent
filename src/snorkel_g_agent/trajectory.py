@@ -7,128 +7,7 @@ from uuid import uuid4
 
 from snorkel_g_agent.schema import AgentAction, ModelResponse, TaskSpec, ToolResult
 from snorkel_g_agent.time_utils import utc_now
-
-TOOL_DEFINITIONS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "exec",
-            "description": "Run a shell command in the task workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "cmd": {"type": "string"},
-                    "timeout_seconds": {"type": "integer"},
-                },
-                "required": ["cmd"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_files",
-            "description": "List files under a path in the task workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "glob": {"type": "string"},
-                    "max_results": {"type": "integer"},
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_text",
-            "description": "Search workspace text files with a regex pattern.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "pattern": {"type": "string"},
-                    "glob": {"type": "string"},
-                    "max_results": {"type": "integer"},
-                    "context_lines": {"type": "integer"},
-                },
-                "required": ["pattern"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "scratchpad",
-            "description": "Append a durable task note to STATE_FILE.md.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "content": {"type": "string"},
-                },
-                "required": ["content"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Read a UTF-8 file from the task workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {"path": {"type": "string"}},
-                "required": ["path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "write_file",
-            "description": "Write a UTF-8 file in the task workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
-                "required": ["path", "content"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "append_file",
-            "description": "Append UTF-8 text to a file in the task workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
-                "required": ["path", "content"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "replace_in_file",
-            "description": "Replace text in a UTF-8 file in the task workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "find": {"type": "string"},
-                    "within": {"type": "string"},
-                    "replacement": {"type": "string"},
-                    "regex": {"type": "boolean"},
-                    "count": {"type": "integer"},
-                    "whitespace_flexible": {"type": "boolean"},
-                },
-                "required": ["path", "find", "replacement"],
-            },
-        },
-    },
-]
+from snorkel_g_agent.tool_definitions import TOOL_DEFINITIONS
 
 
 class TrajectoryWriter:
@@ -198,6 +77,9 @@ class TrajectoryWriter:
                     "arguments": action.model_dump(exclude_none=True),
                 }
             ]
+        provider_extra = self._provider_extra(response.raw)
+        if provider_extra:
+            step["extra"] = {"provider_response": provider_extra}
         if result is not None:
             step["observation"] = {
                 "results": [
@@ -236,3 +118,29 @@ class TrajectoryWriter:
         tmp = self.json_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(self.trajectory, indent=2, ensure_ascii=False))
         tmp.replace(self.json_path)
+
+    @staticmethod
+    def _provider_extra(raw: dict[str, Any]) -> dict[str, Any]:
+        if not raw:
+            return {}
+
+        choice = None
+        choices = raw.get("choices")
+        if isinstance(choices, list) and choices:
+            maybe_choice = choices[0]
+            if isinstance(maybe_choice, dict):
+                choice = maybe_choice
+
+        message = choice.get("message") if choice else None
+        native_tool_calls = None
+        if isinstance(message, dict) and isinstance(message.get("tool_calls"), list):
+            native_tool_calls = message["tool_calls"]
+
+        extra: dict[str, Any] = {
+            "id": raw.get("id"),
+            "object": raw.get("object"),
+            "created": raw.get("created"),
+            "finish_reason": choice.get("finish_reason") if choice else None,
+            "native_tool_calls": native_tool_calls,
+        }
+        return {key: value for key, value in extra.items() if value is not None}

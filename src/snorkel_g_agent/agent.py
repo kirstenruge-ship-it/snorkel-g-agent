@@ -84,6 +84,7 @@ class BenchmarkAgent:
         logger.event("start", task_id=task.task_id, benchmark=task.benchmark, route=self.route_name)
         try:
             step = 0
+            consecutive_parse_errors = 0
             while True:
                 step += 1
                 if asyncio.get_running_loop().time() >= deadline:
@@ -118,6 +119,7 @@ class BenchmarkAgent:
                 try:
                     action = parse_action(response.content)
                 except ActionParseError as exc:
+                    consecutive_parse_errors += 1
                     action = AgentAction(
                         action="scratchpad",
                         title="Action parse error",
@@ -148,8 +150,20 @@ class BenchmarkAgent:
                         exit_code=result.exit_code,
                         content=result.content,
                     )
+                    if (
+                        consecutive_parse_errors
+                        > self.config.run.max_parse_repair_attempts
+                    ):
+                        status = "failed"
+                        error = (
+                            "too many consecutive action parse errors "
+                            f"({consecutive_parse_errors})"
+                        )
+                        logger.event("error", step=step, message=error)
+                        break
                     continue
 
+                consecutive_parse_errors = 0
                 tool_item_id = logger.tool_started(action)
                 result = await executor.run(action)
                 logger.event(

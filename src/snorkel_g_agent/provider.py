@@ -11,6 +11,7 @@ import httpx
 
 from snorkel_g_agent.config import route_headers
 from snorkel_g_agent.schema import ModelMessage, ModelResponse, RouteConfig, Usage
+from snorkel_g_agent.tool_definitions import TOOL_DEFINITIONS
 
 
 class ProviderError(RuntimeError):
@@ -92,6 +93,8 @@ class OpenAICompatibleProvider:
             "messages": [message.model_dump() for message in messages],
             "temperature": 0.2,
             "max_tokens": self.max_model_tokens,
+            "tools": TOOL_DEFINITIONS,
+            "tool_choice": "auto",
         }
         url = _chat_completions_url(self.route)
         timeout = httpx.Timeout(self.request_timeout_seconds)

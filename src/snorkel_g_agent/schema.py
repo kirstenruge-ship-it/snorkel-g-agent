@@ -30,6 +30,7 @@ class RunConfig(BaseModel):
     max_model_tokens: int = Field(default=4096, ge=1)
     command_timeout_seconds: int = Field(default=600, ge=1)
     task_timeout_seconds: int = Field(default=7200, ge=1)
+    max_parse_repair_attempts: int = Field(default=5, ge=0)
     max_tool_output_chars: int = Field(default=24_000, ge=1000)
     state_file_name: str = "STATE_FILE.md"
 

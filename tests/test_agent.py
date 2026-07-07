@@ -44,6 +44,15 @@ class ParseErrorThenFinishProvider:
         return ModelResponse(content=content, model="fake", usage=Usage())
 
 
+class AlwaysParseErrorProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def complete(self, messages):  # noqa: ANN001
+        self.calls += 1
+        return ModelResponse(content="not json", model="fake", usage=Usage())
+
+
 @pytest.mark.asyncio
 async def test_agent_has_no_default_step_ceiling(
     tmp_path: Path,
@@ -139,3 +148,40 @@ async def test_agent_parse_error_prompts_for_repair_without_safe_exec_fallback(
     assert "Return exactly one JSON object" in observations
     assert "safe inspection fallback" not in observations
     assert "rg --files" not in observations
+
+
+@pytest.mark.asyncio
+async def test_agent_stops_after_repeated_parse_repair_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_API_KEY", "secret")
+    system_prompt = tmp_path / "system.md"
+    system_prompt.write_text("system")
+    config = AppConfig(
+        run=RunConfig(
+            default_route="fake",
+            command_timeout_seconds=5,
+            max_parse_repair_attempts=2,
+        ),
+        routes={
+            "fake": RouteConfig(
+                provider="openai-compatible",
+                model="fake-model",
+                base_url="http://127.0.0.1:1/v1",
+                api_key_env="FAKE_API_KEY",
+            )
+        },
+        agent=AgentConfig(system_prompt_path=system_prompt),
+    )
+    agent = BenchmarkAgent(config, "fake", config.routes["fake"], tmp_path / "out")
+    provider = AlwaysParseErrorProvider()
+    agent.provider = provider  # type: ignore[assignment]
+
+    result = await agent.run(
+        TaskSpec(task_id="parse-repair-limit", instruction="do it", workdir=tmp_path)
+    )
+
+    assert result.status == "failed"
+    assert provider.calls == 3
+    assert result.error == "too many consecutive action parse errors (3)"

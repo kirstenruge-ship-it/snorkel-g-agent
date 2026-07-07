@@ -17,6 +17,22 @@ def test_trajectory_writer_emits_harbor_atif(tmp_path: Path) -> None:
         content='{"action":"exec","cmd":"pwd"}',
         model="glm-5.2",
         usage=Usage(),
+        raw={
+            "id": "chatcmpl-test",
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "message": {
+                        "tool_calls": [
+                            {
+                                "type": "function",
+                                "function": {"name": "exec", "arguments": "{}"},
+                            }
+                        ]
+                    },
+                }
+            ],
+        },
     )
     writer.add_agent_step(
         response,
@@ -32,4 +48,6 @@ def test_trajectory_writer_emits_harbor_atif(tmp_path: Path) -> None:
     assert '"name": "replace_in_file"' in data
     assert '"name": "search_text"' in data
     assert '"name": "scratchpad"' in data
+    assert '"provider_response"' in data
+    assert '"native_tool_calls"' in data
     assert (tmp_path / "out" / "trajectory.harbor.jsonl").exists()

@@ -90,6 +90,10 @@ async def test_provider_sends_max_tokens(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert _CaptureClient.payload is not None
     assert _CaptureClient.payload["max_tokens"] == 1234
+    assert _CaptureClient.payload["tool_choice"] == "auto"
+    assert any(
+        tool["function"]["name"] == "exec" for tool in _CaptureClient.payload["tools"]
+    )
 
 
 @pytest.mark.asyncio
@@ -132,3 +136,4 @@ async def test_provider_converts_native_tool_calls_to_action_json(
     response = await provider.complete([ModelMessage(role="user", content="hello")])
 
     assert response.content == '{"name": "bash", "arguments": {"command": "pytest -q"}}'
+    assert response.raw["choices"][0]["message"]["tool_calls"][0]["function"]["name"] == "bash"
