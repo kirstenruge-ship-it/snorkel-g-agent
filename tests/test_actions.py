@@ -80,6 +80,43 @@ def test_parse_replace_in_file_accepts_common_aliases() -> None:
     assert alternate.replacement == "right"
 
 
+def test_parse_exec_action_from_tool_and_command_aliases() -> None:
+    action = parse_action('{"tool":"bash","command":"cat /app/STATE_FILE.md"}')
+
+    assert action.action == "exec"
+    assert action.cmd == "cat /app/STATE_FILE.md"
+
+
+def test_parse_exec_action_from_shell_alias() -> None:
+    action = parse_action('{"action":"shell","cmd":"ls -la"}')
+
+    assert action.action == "exec"
+    assert action.cmd == "ls -la"
+
+
+def test_parse_exec_action_from_terminal_command_alias() -> None:
+    action = parse_action('{"action":"terminal","command":"pwd"}')
+
+    assert action.action == "exec"
+    assert action.cmd == "pwd"
+
+
+def test_parse_exec_action_joins_list_command() -> None:
+    action = parse_action('{"action":"exec","cmd":["ls","-la","/app"]}')
+
+    assert action.action == "exec"
+    assert action.cmd == "ls -la /app"
+
+
+def test_parse_exec_action_from_native_tool_call_arguments() -> None:
+    action = parse_action(
+        '{"name":"bash","arguments":{"command":["python","-m","pytest","-q"]}}'
+    )
+
+    assert action.action == "exec"
+    assert action.cmd == "python -m pytest -q"
+
+
 def test_parse_exec_action_from_bare_command_object() -> None:
     action = parse_action('<tool_call>exec\n{"cmd":"go test ./..."}')
 

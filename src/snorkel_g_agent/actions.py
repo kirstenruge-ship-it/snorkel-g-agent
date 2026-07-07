@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from typing import Any
 
 from pydantic import ValidationError
@@ -128,8 +129,42 @@ def _escape_control_chars_in_strings(blob: str) -> str:
 
 def _normalize_action_aliases(raw: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(raw)
+    arguments = normalized.get("arguments")
+    if isinstance(arguments, dict):
+        merged = dict(arguments)
+        for key, value in normalized.items():
+            if key != "arguments":
+                merged.setdefault(key, value)
+        normalized = merged
+
+    if "action" not in normalized:
+        for key in ("tool", "name"):
+            value = normalized.get(key)
+            if isinstance(value, str) and value:
+                normalized["action"] = value
+                break
+
+    action = normalized.get("action")
+    if isinstance(action, str):
+        action_aliases = {
+            "bash": "exec",
+            "shell": "exec",
+            "sh": "exec",
+            "terminal": "exec",
+            "command": "exec",
+            "run": "exec",
+            "run_command": "exec",
+            "execute": "exec",
+            "execute_bash": "exec",
+        }
+        normalized["action"] = action_aliases.get(action.strip().lower(), action)
+
+    if "cmd" not in normalized and "command" in normalized:
+        normalized["cmd"] = normalized["command"]
     if "action" not in normalized and "cmd" in normalized:
         normalized["action"] = "exec"
+    if isinstance(normalized.get("cmd"), list):
+        normalized["cmd"] = shlex.join(str(part) for part in normalized["cmd"])
     if "replacement" not in normalized and "replace" in normalized:
         normalized["replacement"] = normalized["replace"]
     if "find" not in normalized and "old_string" in normalized:
