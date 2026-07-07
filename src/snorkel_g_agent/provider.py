@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 from collections.abc import Callable
 from typing import Any
@@ -14,6 +15,56 @@ from snorkel_g_agent.schema import ModelMessage, ModelResponse, RouteConfig, Usa
 
 class ProviderError(RuntimeError):
     pass
+
+
+def _decode_tool_arguments(arguments: Any) -> dict[str, Any]:
+    if isinstance(arguments, dict):
+        return arguments
+    if isinstance(arguments, str):
+        stripped = arguments.strip()
+        if not stripped:
+            return {}
+        try:
+            decoded = json.loads(stripped)
+        except json.JSONDecodeError:
+            return {"command": stripped}
+        if isinstance(decoded, dict):
+            return decoded
+        return {"command": stripped}
+    return {}
+
+
+def _content_from_choice(choice: dict[str, Any]) -> str:
+    message = choice.get("message")
+    if isinstance(message, dict):
+        tool_calls = message.get("tool_calls")
+        if isinstance(tool_calls, list) and tool_calls:
+            call = tool_calls[0]
+            if isinstance(call, dict):
+                function = call.get("function")
+                if isinstance(function, dict):
+                    name = function.get("name")
+                    if isinstance(name, str) and name:
+                        return json.dumps(
+                            {
+                                "name": name,
+                                "arguments": _decode_tool_arguments(
+                                    function.get("arguments")
+                                ),
+                            }
+                        )
+        content = message.get("content")
+        if isinstance(content, str):
+            return content
+    text = choice.get("text")
+    return text if isinstance(text, str) else ""
+
+
+def _chat_completions_url(route: RouteConfig) -> str:
+    base_url = route.base_url.rstrip("/")
+    if route.provider == "modal" and not base_url.endswith("/v1"):
+        base_url += "/v1"
+    return base_url + "/chat/completions"
 
 
 class OpenAICompatibleProvider:
@@ -42,7 +93,7 @@ class OpenAICompatibleProvider:
             "temperature": 0.2,
             "max_tokens": self.max_model_tokens,
         }
-        url = self.route.base_url.rstrip("/") + "/chat/completions"
+        url = _chat_completions_url(self.route)
         timeout = httpx.Timeout(self.request_timeout_seconds)
         last_error: Exception | None = None
         for attempt in range(self.request_retries + 1):
@@ -85,7 +136,7 @@ class OpenAICompatibleProvider:
         raw: dict[str, Any] = response.json()
         try:
             choice = raw["choices"][0]
-            content = choice.get("message", {}).get("content") or choice.get("text") or ""
+            content = _content_from_choice(choice)
         except (KeyError, IndexError, TypeError) as exc:
             raise ProviderError(f"unexpected provider response shape: {raw}") from exc
         usage = raw.get("usage") or {}
