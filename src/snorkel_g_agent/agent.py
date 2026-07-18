@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from snorkel_g_agent.actions import ActionParseError, parse_action
 from snorkel_g_agent.context import ContextWindow, append_state_note, initialize_state_file
 from snorkel_g_agent.logging import AgentLogger
 from snorkel_g_agent.prompts import DEFAULT_SYSTEM_PROMPT
-from snorkel_g_agent.provider import OpenAICompatibleProvider
+from snorkel_g_agent.provider import OpenAICompatibleProvider, ProviderError
 from snorkel_g_agent.schema import (
     AgentAction,
     AppConfig,
@@ -86,6 +87,9 @@ class BenchmarkAgent:
         try:
             step = 0
             consecutive_parse_errors = 0
+            consecutive_provider_failures = 0
+            consecutive_tool_failures = 0
+            last_failed_action: str | None = None
             while True:
                 step += 1
                 if asyncio.get_running_loop().time() >= deadline:
@@ -103,7 +107,46 @@ class BenchmarkAgent:
                     route=self.route_name,
                     **payload,
                 )
-                response = await self.provider.complete(context.messages)
+                try:
+                    response = await self.provider.complete(
+                        context.messages,
+                        deadline=deadline,
+                    )
+                except ProviderError as exc:
+                    remaining = deadline - asyncio.get_running_loop().time()
+                    if not exc.retryable or remaining <= 0:
+                        status = "timeout" if exc.kind == "task_deadline" else "failed"
+                        error = str(exc)
+                        logger.event("error", step=step, message=error, kind=exc.kind)
+                        break
+                    consecutive_provider_failures += 1
+                    sleep_seconds = min(
+                        self.config.run.request_retry_base_seconds
+                        * (2 ** min(consecutive_provider_failures - 1, 6)),
+                        self.config.run.request_retry_max_seconds,
+                        max(0.0, remaining),
+                    ) + random.uniform(0, min(1.0, max(0.0, remaining)))
+                    sleep_seconds = min(sleep_seconds, max(0.0, remaining))
+                    message = (
+                        "Temporary model endpoint failure. The runtime preserved the task "
+                        "workspace, context, and STATE_FILE.md. Resume from the exact prior "
+                        "step when service returns; do not restart broad inspection. "
+                        f"Failure kind: {exc.kind}."
+                    )
+                    append_state_note(state_file, message)
+                    context.add("user", message)
+                    logger.event(
+                        "provider_recovery",
+                        step=step,
+                        failure=consecutive_provider_failures,
+                        sleep_seconds=round(sleep_seconds, 3),
+                        kind=exc.kind,
+                        message=str(exc),
+                    )
+                    if sleep_seconds > 0:
+                        await asyncio.sleep(sleep_seconds)
+                    continue
+                consecutive_provider_failures = 0
                 prompt_tokens += response.usage.prompt_tokens or 0
                 completion_tokens += response.usage.completion_tokens or 0
                 logger.event(
@@ -166,7 +209,25 @@ class BenchmarkAgent:
 
                 consecutive_parse_errors = 0
                 tool_item_id = logger.tool_started(action)
-                result = await executor.run(action)
+                action_key = json.dumps(action.model_dump(exclude_none=True), sort_keys=True)
+                if action.action == "finish" and consecutive_tool_failures:
+                    result = ToolResult(
+                        ok=False,
+                        content=(
+                            "Finish rejected because the immediately preceding tool operation "
+                            "failed. Repair or replace that operation, verify the task outcome, "
+                            "and only then finish. A failed tool call is evidence, not completion."
+                        ),
+                        extra={"finish_rejected_after_tool_failure": True},
+                    )
+                else:
+                    result = await self._run_tool_with_retries(
+                        executor,
+                        action,
+                        logger,
+                        step,
+                        deadline,
+                    )
                 logger.event(
                     "tool",
                     step=step,
@@ -177,11 +238,30 @@ class BenchmarkAgent:
                 )
                 logger.tool_completed(tool_item_id, action, result)
                 trajectory.add_agent_step(response, action, result)
-                context.add("user", result.content)
+                feedback = result.content
+                if not result.ok:
+                    consecutive_tool_failures += 1
+                    repeated = action_key == last_failed_action
+                    last_failed_action = action_key
+                    feedback += (
+                        "\n\nTOOL FAILURE RECOVERY: Continue working. Inspect the concrete "
+                        "failure, preserve any successful partial work, and retry the individual "
+                        "operation with corrected arguments or a smaller deterministic command. "
+                        "Do not abandon the task and do not repeat the identical failed action "
+                        "unchanged."
+                    )
+                    if repeated:
+                        feedback += (
+                            " This exact action already failed previously; change the approach now."
+                        )
+                else:
+                    consecutive_tool_failures = 0
+                    last_failed_action = None
+                context.add("user", feedback)
                 self._update_state(state_file, action, result)
 
-                if action.action == "finish":
-                    status = "completed" if result.ok else "failed"
+                if action.action == "finish" and result.ok:
+                    status = "completed"
                     summary = action.summary or result.content
                     break
         except Exception as exc:
@@ -206,6 +286,49 @@ class BenchmarkAgent:
         logger.turn_completed(prompt_tokens, completion_tokens)
         return result
 
+    async def _run_tool_with_retries(
+        self,
+        executor: ToolExecutor,
+        action: AgentAction,
+        logger: AgentLogger,
+        step: int,
+        deadline: float,
+    ) -> ToolResult:
+        for attempt in range(self.config.run.tool_exception_retries + 1):
+            try:
+                return await executor.run(action)
+            except Exception as exc:
+                remaining = deadline - asyncio.get_running_loop().time()
+                if attempt >= self.config.run.tool_exception_retries or remaining <= 0:
+                    return ToolResult(
+                        ok=False,
+                        content=(
+                            f"Tool runtime raised {type(exc).__name__}: {exc}. "
+                            "The task workspace and prior progress were preserved."
+                        ),
+                        extra={
+                            "tool_exception": type(exc).__name__,
+                            "attempts": attempt + 1,
+                        },
+                    )
+                sleep_seconds = min(
+                    self.config.run.tool_retry_base_seconds * (2**attempt)
+                    + random.uniform(0, 0.25),
+                    max(0.0, remaining),
+                )
+                logger.event(
+                    "tool_retry",
+                    step=step,
+                    action=action.action,
+                    attempt=attempt + 1,
+                    max_attempts=self.config.run.tool_exception_retries + 1,
+                    sleep_seconds=round(sleep_seconds, 3),
+                    message=str(exc),
+                )
+                if sleep_seconds > 0:
+                    await asyncio.sleep(sleep_seconds)
+        raise AssertionError("unreachable")
+
     def _initial_user_prompt(self, task: TaskSpec, state_file: Path) -> str:
         return "\n".join(
             [
@@ -218,6 +341,9 @@ class BenchmarkAgent:
                 task.instruction,
                 "",
                 "Start by inspecting the workspace. Return exactly one JSON action.",
+                "Continue until the requested artifacts or code are implemented and checked. "
+                "Endpoint retries and individual tool failures are recoverable events, not reasons "
+                "to stop or restart the task.",
             ]
         )
 

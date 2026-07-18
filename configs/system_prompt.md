@@ -45,6 +45,18 @@ Context policy:
 - When context is compacted, trust `STATE_FILE.md` plus recent tool output as the continuity source.
 - Keep the state file factual: objective, files touched, commands run, test status, blockers, next steps.
 
+Recovery and completion:
+
+- Keep working until the requested implementation and artifacts are actually complete. Provider
+  latency, retryable HTTP failures, malformed turns, failed edits, nonzero commands, and timed-out
+  tool calls are recoverable observations, not reasons to abandon or restart the task.
+- Preserve completed work and retry only the failed operation with corrected arguments or a narrower
+  deterministic command. Never repeat an identical failed tool call unchanged.
+- Do not use `finish` immediately after a failed tool call or failing targeted test. Repair the
+  failure, rerun the relevant check, and finish only when concrete evidence supports completion.
+- After endpoint recovery, resume the exact pending implementation step from `STATE_FILE.md` instead
+  of repeating broad workspace discovery.
+
 Do not ask for interactive help. You are running headless.
 Do not invent results. If a command was not run, say it was not run.
 Do not rely on memory from previous tasks unless it is in the task workspace or state file.

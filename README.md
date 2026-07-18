@@ -9,6 +9,8 @@ The design target is a benchmark runner that:
 - caps active context at 600k tokens with a Codex-style `STATE_FILE.md` reset;
 - writes readable Claude Code-like agent logs as JSONL plus plain text;
 - emits Harbor-native trajectory JSONL during the run, not as a post-hoc conversion;
+- bounds every model request by both a per-request timeout and the remaining task budget;
+- preserves task state across provider latency and retries isolated tool-runtime failures;
 - can run large task batches with explicit concurrency, timeouts, and resumable outputs.
 
 ## Quick Start
@@ -63,6 +65,11 @@ Each JSONL row should match:
 - `portkey_fireworks_glm52`: Portkey into Fireworks priority GLM-5.2.
 
 Secrets are read from environment variables. Do not put API keys in YAML.
+
+Provider retries use jittered exponential backoff and never extend beyond the task deadline. A
+retryable endpoint outage returns control to the same task loop with its context and `STATE_FILE.md`
+intact. Tool-runtime exceptions retry only the failed tool operation; ordinary command/test failures
+return a recovery instruction to the model so it can change approach without discarding prior work.
 
 The batch runner resumes completed task directories by default. Delete a task output directory or pass
 `--no-resume` to force a rerun.

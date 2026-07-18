@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import os
 import re
 import shlex
+import signal
 from pathlib import Path
 
 from snorkel_g_agent.schema import AgentAction, ToolResult
@@ -120,14 +123,21 @@ class ToolExecutor:
             cwd=self.workdir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
         )
         timed_out = False
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except TimeoutError:
             timed_out = True
-            process.kill()
-            stdout, stderr = await process.communicate()
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGTERM)
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=3)
+            except TimeoutError:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                stdout, stderr = await process.communicate()
         content = (
             f"$ {action.cmd}\n"
             f"exit_code={process.returncode}\n\n"
@@ -143,7 +153,11 @@ class ToolExecutor:
             exit_code=process.returncode,
             timed_out=timed_out,
             truncated=truncated,
-            extra={"timeout_seconds": timeout},
+            extra={
+                "timeout_seconds": timeout,
+                "failure_kind": "timeout" if timed_out else None,
+                "process_group_terminated": timed_out,
+            },
         )
 
     def _read_file(self, action: AgentAction) -> ToolResult:

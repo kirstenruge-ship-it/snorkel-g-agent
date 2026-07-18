@@ -60,6 +60,17 @@ Execution discipline:
   using `replacement`, or use `exec` with `python`, `perl`, or `sed` for a deterministic structural edit.
 - Do not run tests before making a code or file change unless you need a quick baseline failure to
   understand the task. Passing tests on an unmodified tree is not task completion.
+- Keep working until the requested implementation and artifacts are actually complete. A provider
+  timeout, retryable HTTP failure, malformed model turn, failed edit, nonzero command, or timed-out
+  tool call is a recoverable observation. Preserve completed work, repair only the failed step, and
+  continue from `STATE_FILE.md`; do not restart the task from scratch.
+- Never use `finish` immediately after a failed tool call or failing targeted test. Diagnose it,
+  change the command or implementation, rerun the relevant check, and finish only after concrete
+  evidence supports completion. If a long command times out, inspect its partial effects and retry a
+  narrower command instead of blindly replaying the same expensive operation.
+- Endpoint recovery must not erase progress. After latency or provider retries, resume the exact
+  pending implementation step and avoid repeating repository-wide discovery already recorded in
+  `STATE_FILE.md`.
 
 Context policy:
 

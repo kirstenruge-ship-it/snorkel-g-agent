@@ -6,6 +6,10 @@ run:
   command_timeout_seconds: 600
   task_timeout_seconds: 7200
   request_retries: 3
+  request_retry_base_seconds: 2
+  request_retry_max_seconds: 30
+  tool_exception_retries: 2
+  tool_retry_base_seconds: 0.5
   max_tool_output_chars: 24000
   state_file_name: STATE_FILE.md
 
